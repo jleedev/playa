@@ -1,3 +1,4 @@
+from collections.abc import Buffer
 import logging
 import zlib
 from typing import (
@@ -407,7 +408,7 @@ class ContentStream(Mapping[str, PDFObject]):
     def __init__(
         self,
         attrs: Union[Dict[str, Any], None] = None,
-        rawdata: bytes = b"",
+        rawdata: Buffer = b"",
         decipher: Union[DecipherCallable, None] = None,
     ) -> None:
         if attrs is None:

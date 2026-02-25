@@ -2,6 +2,7 @@
 Basic classes for PDF document parsing.
 """
 
+from collections.abc import Buffer
 import io
 import itertools
 import logging
@@ -67,6 +68,7 @@ from playa.utils import (
     decode_text,
     format_int_alpha,
     format_int_roman,
+    buffer_find,
 )
 from playa.worker import (
     PageRef,
@@ -106,17 +108,17 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
-    start = buffer.find(b"%PDF-")
+def _find_header(buffer: Buffer) -> Tuple[bytes, int]:
+    start = buffer_find(buffer, b"%PDF-")
     if start == -1:
         log.warning("Could not find b'%PDF-' header, is this a PDF?")
         return b"", 0
-    return buffer[start : start + 8], start
+    return bytes(buffer[start : start + 8]), start
 
 
-def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap.mmap]]:
-    if isinstance(fp, bytes):
-        buffer: Union[bytes, mmap.mmap] = fp
+def _open_input(fp: Union[BinaryIO, Buffer]) -> Tuple[str, int, Buffer]:
+    if isinstance(fp, Buffer):
+        buffer = fp
     else:
         try:
             buffer = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
@@ -125,6 +127,7 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
             buffer = fp.read()
         except ValueError:
             raise
+    buffer = memoryview(buffer)
     hdr, offset = _find_header(buffer)
     log.debug("Found header at %d: %r", offset, hdr)
     try:
@@ -178,7 +181,7 @@ class Document(Mapping[int, PDFObject]):
 
     trailer: Dict[str, PDFObject]
     info: Dict[str, PDFObject]
-    buffer: Union[bytes, mmap.mmap]  # FIXME: abstract type for this?
+    buffer: Buffer
     space: DeviceSpace
     encryption: Union[Tuple[Tuple[bytes, bytes], Dict], None] = None
     decipher: Union[DecipherCallable, None] = None
@@ -297,8 +300,8 @@ class Document(Mapping[int, PDFObject]):
                     # trailer after it, which will be the correct one
                     # to use (because linearization)
                     if m := XREFR.match(self.buffer, self._startxref_pos):
-                        self._trailer_pos = self.buffer.find(
-                            b"trailer", self._startxref_pos
+                        self._trailer_pos = buffer_find(
+                            self.buffer, b"trailer", self._startxref_pos
                         )
                         if self._trailer_pos != -1:
                             self._trailer_pos += 7
@@ -897,7 +900,7 @@ class PageList(Sequence[Page]):
             by_objid[objid] = page
             if label is not None:
                 if label in by_label:
-                    log.info("Duplicate page label %s at index %d", label, page_idx)
+                    log.info("Duplicate page label %r at index %d", label, page_idx)
                 else:
                     by_label[label] = page
         return pages, by_label, by_objid

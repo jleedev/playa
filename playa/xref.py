@@ -35,6 +35,7 @@ from playa.pdftypes import (
 from playa.utils import (
     choplist,
     nunpack,
+    buffer_find,
 )
 from playa.worker import _ref_document
 
@@ -240,7 +241,7 @@ class XRefFallback(XRef):
         # on it being complete or correct.
         pos = 0
         while True:
-            pos = parser.buffer.find(b"trailer", pos)
+            pos = buffer_find(parser.buffer, b"trailer", pos)
             if pos == -1:
                 break
             pos += len(b"trailer")

@@ -1,5 +1,7 @@
 """Miscellaneous Routines."""
 
+from collections.abc import Buffer
+import re
 import string
 from typing import (
     TYPE_CHECKING,
@@ -304,6 +306,17 @@ def nunpack(s: bytes, default: int = 0) -> int:
     else:
         return int.from_bytes(s, byteorder="big", signed=False)
 
+
+def buffer_find(buf: Buffer, sub: bytes, start: int = None, end: int = None, /) -> int:
+    """Generic bytes.find or mmap.find (looking at you, memoryview)."""
+    if start is None:
+        start = 0
+    if end is None:
+        end = len(buf)
+    if m := re.compile(re.escape(sub)).search(buf, start, end):
+        return m.start()
+    else:
+        return -1
 
 PDFDocEncoding: Final[str] = "".join(
     chr(x)

@@ -1,7 +1,7 @@
 """PDF lexer and parser."""
 
+from collections.abc import Buffer
 import logging
-import mmap
 import re
 from binascii import unhexlify
 from collections import deque
@@ -122,7 +122,7 @@ DOT: Final[int] = ord(b".")
 class Lexer(Iterator[Tuple[int, Token]]):
     """Lexer for PDF data."""
 
-    def __init__(self, data: Union[bytes, mmap.mmap], pos: int = 0) -> None:
+    def __init__(self, data: Buffer, pos: int = 0) -> None:
         self.data = data
         self.pos = pos
         self.end = len(data)
@@ -141,7 +141,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
         """Get the current position in the buffer."""
         return self.pos
 
-    def read(self, objlen: int) -> bytes:
+    def read(self, objlen: int) -> Buffer:
         """Read data from current position, advancing to the end of
         this data."""
         pos = self.pos
@@ -157,7 +157,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
             self.pos = self.end
         else:
             self.pos = m.end()
-        return (linepos, self.data[linepos : self.pos])
+        return (linepos, bytes(self.data[linepos : self.pos]))
 
     def __next__(self) -> Any:  # should be Tuple[int, Token] but mypyc
         """Get the next token in iteration, raising StopIteration when
@@ -277,7 +277,7 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
 
     def __init__(
         self,
-        data: Union[bytes, mmap.mmap],
+        data: Buffer,
         doc: Union["Document", None] = None,
         pos: int = 0,
         strict: bool = False,
@@ -297,7 +297,7 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
         return _deref_document(self.docref)
 
     def newstream(
-        self, data: Union[bytes, mmap.mmap], streamid: Union[int, None] = None
+        self, data: Buffer, streamid: Union[int, None] = None
     ) -> None:
         """Continue parsing from a new data stream."""
         self._lexer = Lexer(data)
@@ -638,7 +638,7 @@ class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
 
     def __init__(
         self,
-        data: Union[bytes, mmap.mmap],
+        data: Buffer,
         doc: Union["Document", None] = None,
         pos: int = 0,
         strict: bool = False,
@@ -816,7 +816,7 @@ class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
         pos = self._parser.tell()
         m = ENDSTREAMR.match(self._parser._lexer.data, pos)
         if m is not None:
-            return ContentStream(dic, bytes(data), decipher)
+            return ContentStream(dic, data, decipher)
         # We already know it's an error in strict mode, but read the
         # line anyway to show the user what's wrong
         pos, line = self._parser.nextline()
@@ -838,7 +838,7 @@ class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
             if line == b"":  # Means EOF
                 log.warning("Incorrect length for stream, no 'endstream' found")
                 break
-        return ContentStream(dic, bytes(data), decipher)
+        return ContentStream(dic, data, decipher)
 
     # Delegation follows
     def seek(self, pos: int) -> None:
